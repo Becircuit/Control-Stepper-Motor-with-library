@@ -1,0 +1,150 @@
+
+#include <AccelStepper.h>
+char buffer[16];   //maximum expected length 
+int len = 0; // the length of the buffer
+int steps = 0; //distance in mm from the computer
+int speeds = 0; //delay between two steps, received from the computer
+int receivedCommand; //character for commands
+
+bool newData, runallowed = false; // booleans for new data from serial, and runallowed flag
+
+// direction Digital 9 (CCW), pulses Digital 8 (CLK)
+AccelStepper stepper(1, 8, 9);
+//AccelStepper stepper(2,3,4,5);
+ 
+ 
+void setup()
+{
+  Serial.begin(9600); //define baud rate
+  Serial.println("Testing Accelstepper"); //print a message
+  
+  //setting up some default values for maximum speed and maximum acceleration
+  stepper.setMaxSpeed(2000); //SPEED = Steps / second
+  stepper.setAcceleration(500); //ACCELERATION = Steps /(second)^2
+ 
+  stepper.disableOutputs(); //disable outputs, so the motor is not getting warm (no current)
+}
+/*/////////////////////////////////////////////****The run method for motor****\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\*/
+void continuousRun() //method for the motor
+{
+  if (runallowed == true )
+  {
+     
+   if(steps>0){
+    if (stepper.currentPosition() >= steps ) //abs() is needed because of the '<'
+    {
+     
+      Serial.print("Current position1="); 
+      Serial.println(stepper.currentPosition()); 
+
+      runallowed = false; //disable running -> the program will not try to enter this if-else anymore
+      stepper.disableOutputs(); // disable power
+     
+      Serial.println("disable Outputs ");
+
+      stepper.setCurrentPosition(0); //reset the position to zero
+    }
+   }
+   else{
+      if (stepper.currentPosition() <= steps ) //abs() is needed because of the '<'
+      {
+     
+      Serial.print("Current position2="); 
+      Serial.println(stepper.currentPosition()); 
+
+      runallowed = false; //disable running -> the program will not try to enter this if-else anymore
+      stepper.disableOutputs(); // disable power
+     
+      Serial.println("disable Outputs ");
+
+      stepper.setCurrentPosition(0); //reset the position to zero
+    }
+   }
+ 
+  }
+  
+}
+ 
+/*////////////////////////////////////////////****Method to check the serial data****\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\*/
+void checkSerial() //method for receiving the commands
+{  
+  
+ 
+  if (Serial.available() > 0) //if something comes
+  {
+    receivedCommand = Serial.read(); // this will read the command character
+   // Serial.print(receivedCommand); 
+    newData = true; //this creates a flag
+    buffer[len++] = receivedCommand;  
+    //
+    // check for overflow
+    //
+    if (len >= 16)
+    {
+      // overflow, resetting
+      len = 0;
+    }
+    //
+    // check for newline (end of message)
+    //
+  }
+ 
+  if (newData == true) //if we received something (see above)
+  {
+    //START - MEASURE
+   //  Serial.println("new data"); 
+
+   // if (receivedCommand == 13) //** to check for newline  '\n' 
+    if (receivedCommand == '\n') //to check for newline  '\n'
+    { 
+     // Serial.println("/n"); 
+
+          
+      int n = sscanf(buffer, "%d %d", &steps, &speeds);
+      if (n == 2)
+      {
+        
+          Serial.print("Steps:"); 
+          Serial.print(steps);
+          Serial.print(" Speed:"); 
+          Serial.println(speeds); 
+
+        
+       if(steps!=0){
+          runallowed = true; //allow running
+
+          stepper.enableOutputs(); //enable pins 
+          Serial.println("Enable Outputs");
+
+         // stepper.setSpeed(speeds); //set speed 
+          stepper.setAcceleration(speeds);      
+          stepper.move(steps); //set distance    
+       } 
+ 
+      }
+      else
+      {
+        Serial.println("ERROR");
+      }
+      len = 0; // reset buffer counter
+ 
+    }
+  }
+  //after we went through the above tasks, newData becomes false again, so we are ready to receive new commands again.
+  newData = false;
+ 
+}
+/*//////////////////////////////////////***Main function***\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\*/
+void loop()
+{
+  checkSerial(); //check serial port for new commands
+  
+  stepper.run(); //step the motor (this will step the motor by 1 step at each loop)
+
+   continuousRun();
+
+
+}
+ 
+
+
